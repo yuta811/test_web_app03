@@ -16,6 +16,23 @@
   });
   addEventListener('keyup', e => keys.delete(e.code));
 
+
+  const touchButtons = Array.from(document.querySelectorAll('[data-key]'));
+  function setMobileKey(code, pressed) {
+    if (pressed) keys.add(code);
+    else keys.delete(code);
+  }
+  touchButtons.forEach(btn => {
+    const code = btn.dataset.key;
+    const press = e => { e.preventDefault(); setMobileKey(code, true); };
+    const release = e => { e.preventDefault(); setMobileKey(code, false); };
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
+    btn.addEventListener('pointerleave', release);
+  });
+
+
   const stages = [
     {
       name: 'Stage 1: はじめての照明',
@@ -253,7 +270,8 @@
       `<strong>${stages[stageIndex].name}</strong><br>` +
       `Time: ${time.toFixed(1)}s | Deaths: ${deaths}${bestText} | Key: ${hasKey?'YES':'NO'} | Locks: ${stage.lights.filter(l=>l.locked).length}/${LOCK_LIMIT}${shape}<br>` +
       `<span class="muted">Hint: ${stage.hint}</span><br>` +
-      `<span class="muted">Arrows: move, Space: jump, A/D: angle, W/S: range, E: lock, R: reset</span>`;
+      `<span class="muted">Arrows: move, Space: jump, A/D: angle, W/S: range, E: lock, R: reset</span>` +
+      `<br><span class="muted">Mobile: use on-screen buttons for movement/light controls</span>`;
   }
 
   resetStage();
