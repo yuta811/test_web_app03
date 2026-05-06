@@ -39,7 +39,7 @@
       const MISSILE = { timeLimit: 60, baseLoadSpeed: 100 / 60 };
       const STAGE_LENGTH = 6000;
       const FALL_DEATH_Y = 1100;
-      const GAME_VERSION = 'v1.1.0';
+      const GAME_VERSION = 'v1.2.0';
       // NOTE: 改修時は必ず GAME_VERSION を更新すること。
 
       const canvas = document.getElementById('gameCanvas');
@@ -326,20 +326,24 @@
       }
 
       function respawnNearPlatform() {
+        const maxRespawnDistance = 900;
         let nearest = null;
         let nearestDist = Infinity;
+
         for (const obj of levelObjects) {
           if (obj.type !== 'platform') continue;
           const platformTop = obj.y - player.height;
           const candidateX = clamp(player.x, obj.x + 18, obj.x + obj.width - player.width - 18);
-          const dx = Math.abs(candidateX - player.x);
-          const dy = Math.abs(platformTop - player.y);
-          const dist = dx + dy;
-          if (dist < nearestDist) {
+          const dx = candidateX - player.x;
+          const dy = platformTop - player.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist <= maxRespawnDistance && dist < nearestDist) {
             nearestDist = dist;
             nearest = { x: candidateX, y: platformTop };
           }
         }
+
         if (!nearest) return endGame(false, 'SIGNAL LOST');
         player.x = nearest.x;
         player.y = nearest.y;
