@@ -39,7 +39,7 @@
       const MISSILE = { timeLimit: 60, baseLoadSpeed: 100 / 60 };
       const STAGE_LENGTH = 6000;
       const FALL_DEATH_Y = 1100;
-      const GAME_VERSION = 'v1.2.0';
+      const GAME_VERSION = 'v1.2.2';
       // NOTE: 改修時は必ず GAME_VERSION を更新すること。
 
       const canvas = document.getElementById('gameCanvas');
@@ -223,11 +223,7 @@
 
         if (player.x + player.width < 3600 || player.x > 3700) state.loadNoiseHit = false;
         if (player.y > FALL_DEATH_Y) {
-          if (Math.abs(player.vx) <= 0.01) {
-            respawnNearPlatform();
-          } else {
-            return endGame(false, 'SIGNAL LOST');
-          }
+          respawnNearPlatform();
         }
 
         const loadWorldX = STAGE_LENGTH * (missile.progress / 100);
