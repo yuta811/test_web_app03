@@ -1,12 +1,24 @@
 # 実機操作テスト環境
 
-## 1) セットアップ
+新しいタスク開始時は、まず次を実行してください（毎回同じ手順でOK）。
+
 ```bash
-npm install
-npm run test:setup
+npm run test:bootstrap
 ```
 
-> `npm run test:setup` は Playwright の Chromium を取得します。
+このコマンドは以下を順に実行します。
+- `npm install`
+- `npx playwright install chromium`
+- `npx playwright install-deps chromium`（失敗時は必要な再実行コマンドを表示）
+
+## 1) セットアップ（手動実行したい場合）
+```bash
+npm install
+npx playwright install chromium
+sudo npx playwright install-deps chromium
+```
+
+> `libatk-1.0.so.0` などの不足エラーは、OS依存パッケージ未導入が原因です。
 
 ## 2) ローカル起動（手動操作）
 ```bash

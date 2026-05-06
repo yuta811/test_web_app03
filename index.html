@@ -89,6 +89,7 @@
 
       const intersect = (a,b)=> a.x < b.x+b.width && a.x+a.width > b.x && a.y < b.y+b.height && a.y+a.height > b.y;
       const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+      const hasReachedGoalLine = () => player.x + player.width >= GOAL_X;
 
       const FIXED_VIEW = { w: 1280, h: 720 };
       let viewport = { w: FIXED_VIEW.w, h: FIXED_VIEW.h };
@@ -216,10 +217,10 @@
             player.effects.loadBoostTimer = Math.max(player.effects.loadBoostTimer, obj.duration);
             if (!state.loadNoiseHit) { state.loadNoiseTaken++; state.loadNoiseHit = true; }
             state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.28);
-          } else if (obj.type === 'goal') {
-            return endGame(true, 'ABORT COMPLETE');
           }
         }
+
+        if (hasReachedGoalLine()) return endGame(true, 'ABORT COMPLETE');
 
         if (player.x + player.width < 3600 || player.x > 3700) state.loadNoiseHit = false;
         if (player.y > FALL_DEATH_Y) {
