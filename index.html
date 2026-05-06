@@ -58,7 +58,7 @@
       };
 
       const player = {
-        x: 80, y: 462, vx: 0, vy: 0, width: PLAYER.width, height: PLAYER.height,
+        x: 80, y: 420, vx: 0, vy: 0, width: PLAYER.width, height: PLAYER.height,
         grounded: true,
         effects: { heavyGravityTimer: 0, loadBoostTimer: 0 }
       };
@@ -86,34 +86,28 @@
       const intersect = (a,b)=> a.x < b.x+b.width && a.x+a.width > b.x && a.y < b.y+b.height && a.y+a.height > b.y;
       const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
 
-      let viewport = { w: innerWidth, h: innerHeight, portraitLockedPlay: false };
+      const FIXED_VIEW = { w: 720, h: 1280 };
+      let viewport = { w: FIXED_VIEW.w, h: FIXED_VIEW.h };
 
       function resize() {
         const dpr = window.devicePixelRatio || 1;
-        viewport.portraitLockedPlay = innerHeight > innerWidth;
-        viewport.w = viewport.portraitLockedPlay ? innerHeight : innerWidth;
-        viewport.h = viewport.portraitLockedPlay ? innerWidth : innerHeight;
+        viewport.w = FIXED_VIEW.w;
+        viewport.h = FIXED_VIEW.h;
 
         canvas.width = Math.floor(viewport.w * dpr);
         canvas.height = Math.floor(viewport.h * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        if (viewport.portraitLockedPlay) {
-          canvas.style.width = `${innerHeight}px`;
-          canvas.style.height = `${innerWidth}px`;
-          canvas.style.transformOrigin = 'center center';
-          canvas.style.transform = 'translate(-50%, -50%) rotate(-90deg)';
-          canvas.style.position = 'fixed';
-          canvas.style.left = '50%';
-          canvas.style.top = '50%';
-        } else {
-          canvas.style.width = '100%';
-          canvas.style.height = '100%';
-          canvas.style.transform = 'none';
-          canvas.style.position = 'static';
-          canvas.style.left = '';
-          canvas.style.top = '';
-        }
+        const scale = Math.min(innerWidth / viewport.w, innerHeight / viewport.h);
+        const cssW = Math.floor(viewport.w * scale);
+        const cssH = Math.floor(viewport.h * scale);
+
+        canvas.style.width = `${cssW}px`;
+        canvas.style.height = `${cssH}px`;
+        canvas.style.position = 'fixed';
+        canvas.style.left = '50%';
+        canvas.style.top = '50%';
+        canvas.style.transform = 'translate(-50%, -50%)';
       }
 
       function press() {
@@ -143,7 +137,7 @@
       }
 
       function resetGame() {
-        player.x = 80; player.y = 462; player.vx = 0; player.vy = 0; player.grounded = true;
+        player.x = 80; player.y = 420; player.vx = 0; player.vy = 0; player.grounded = true;
         player.effects.heavyGravityTimer = 0; player.effects.loadBoostTimer = 0;
         missile.progress = 0;
         state.readyTimer = 3;
