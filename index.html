@@ -39,7 +39,7 @@
       const MISSILE = { timeLimit: 60, baseLoadSpeed: 100 / 60 };
       const STAGE_LENGTH = 6000;
       const FALL_DEATH_Y = 1100;
-      const GAME_VERSION = 'v1.2.2';
+      const GAME_VERSION = 'v1.3.0';
       // NOTE: 改修時は必ず GAME_VERSION を更新すること。
 
       const canvas = document.getElementById('gameCanvas');
@@ -249,24 +249,134 @@
         if (p < 50) return 'S'; if (p < 65) return 'A'; if (p < 80) return 'B'; if (p < 95) return 'C'; return 'D';
       }
 
+
+
+      function roundedRect(x, y, width, height, radius) {
+        const r = Math.min(radius, width * 0.5, height * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + width, y, x + width, y + height, r);
+        ctx.arcTo(x + width, y + height, x, y + height, r);
+        ctx.arcTo(x, y + height, x, y, r);
+        ctx.arcTo(x, y, x + width, y, r);
+        ctx.closePath();
+      }
+
+      function drawPlayerSprite() {
+        const x = player.x;
+        const y = player.y;
+        const bob = Math.sin(performance.now() / 85) * (player.grounded ? 1.2 : 0.4);
+        ctx.save();
+        ctx.translate(x, y + bob);
+
+        const bodyGrad = ctx.createLinearGradient(0, 0, 0, player.height);
+        bodyGrad.addColorStop(0, '#93d8ff');
+        bodyGrad.addColorStop(1, '#2d8cca');
+        roundedRect(3, 8, player.width - 6, player.height - 8, 12);
+        ctx.fillStyle = bodyGrad;
+        ctx.fill();
+
+        roundedRect(10, 2, player.width - 20, 16, 8);
+        ctx.fillStyle = '#dff7ff';
+        ctx.fill();
+        ctx.fillStyle = '#123f58';
+        ctx.fillRect(14, 8, 8, 4);
+        ctx.fillRect(player.width - 22, 8, 8, 4);
+
+        ctx.fillStyle = '#0a2437';
+        ctx.fillRect(7, player.height - 10, 12, 8);
+        ctx.fillRect(player.width - 19, player.height - 10, 12, 8);
+
+        const thruster = clamp(player.vx / PLAYER.maxGroundSpeed, 0, 1);
+        if (!player.grounded || thruster > 0.4) {
+          const flameW = 5 + thruster * 8;
+          ctx.fillStyle = '#ffd36f';
+          ctx.beginPath();
+          ctx.moveTo(8, player.height - 2);
+          ctx.lineTo(8 - flameW, player.height + 8);
+          ctx.lineTo(14, player.height - 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(player.width - 8, player.height - 2);
+          ctx.lineTo(player.width - 8 + flameW, player.height + 8);
+          ctx.lineTo(player.width - 14, player.height - 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
       function draw() {
         const w = viewport.w, h = viewport.h;
-        ctx.fillStyle = '#080b16'; ctx.fillRect(0,0,w,h);
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, '#091226');
+        sky.addColorStop(0.52, '#111f3a');
+        sky.addColorStop(1, '#1c2d4c');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
 
         ctx.save();
         ctx.translate(-state.camX, 0);
 
-        ctx.fillStyle = '#141b2a';
-        for (let i = 0; i < 40; i++) ctx.fillRect(i*180, 70 + (i%3)*24, 120, 8);
+        for (let i = 0; i < 36; i++) {
+          const towerX = i * 210 + 70;
+          const towerH = 120 + (i % 5) * 36;
+          ctx.fillStyle = 'rgba(23, 36, 63, 0.75)';
+          ctx.fillRect(towerX, h - 180 - towerH, 110, towerH);
+          ctx.fillStyle = 'rgba(115, 185, 255, 0.14)';
+          for (let j = 0; j < 5; j++) ctx.fillRect(towerX + 18, h - 168 - towerH + j * 22, 14, 10);
+        }
 
         for (const obj of levelObjects) {
-          if (obj.type === 'platform') { ctx.fillStyle = '#2e3445'; }
-          if (obj.type === 'slow_floor') { ctx.fillStyle = '#1d2b4e'; }
-          if (obj.type === 'boost_floor') { ctx.fillStyle = '#1db2e8'; }
-          if (obj.type === 'gravity_zone') { ctx.fillStyle = 'rgba(168,108,247,.35)'; }
-          if (obj.type === 'load_noise') { ctx.fillStyle = '#d84545'; }
-          if (obj.type === 'goal') { ctx.fillStyle = '#8df58b'; }
-          ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+          if (obj.type === 'platform') {
+            const platGrad = ctx.createLinearGradient(0, obj.y, 0, obj.y + obj.height);
+            platGrad.addColorStop(0, '#506080');
+            platGrad.addColorStop(1, '#2b354e');
+            ctx.fillStyle = platGrad;
+            roundedRect(obj.x, obj.y, obj.width, obj.height, 10);
+            ctx.fill();
+          } else if (obj.type === 'slow_floor') {
+            ctx.fillStyle = '#2d466f';
+            roundedRect(obj.x, obj.y, obj.width, obj.height, 8);
+            ctx.fill();
+            ctx.fillStyle = '#9cb6e0';
+            for (let i = 12; i < obj.width; i += 26) ctx.fillRect(obj.x + i, obj.y + 6, 12, 8);
+          } else if (obj.type === 'boost_floor') {
+            ctx.fillStyle = '#18bfd2';
+            roundedRect(obj.x, obj.y, obj.width, obj.height, 8);
+            ctx.fill();
+            ctx.fillStyle = '#e4fdff';
+            for (let i = 0; i < obj.width; i += 30) {
+              ctx.beginPath();
+              ctx.moveTo(obj.x + i + 6, obj.y + obj.height - 4);
+              ctx.lineTo(obj.x + i + 20, obj.y + 4);
+              ctx.lineTo(obj.x + i + 26, obj.y + obj.height - 4);
+              ctx.fill();
+            }
+          } else if (obj.type === 'gravity_zone') {
+            ctx.fillStyle = 'rgba(168,108,247,.25)';
+            roundedRect(obj.x, obj.y, obj.width, obj.height, 16);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(213,177,255,.7)';
+            ctx.setLineDash([10, 8]);
+            ctx.strokeRect(obj.x + 4, obj.y + 4, obj.width - 8, obj.height - 8);
+            ctx.setLineDash([]);
+          } else if (obj.type === 'load_noise') {
+            ctx.fillStyle = '#e05252';
+            roundedRect(obj.x, obj.y, obj.width, obj.height, 10);
+            ctx.fill();
+            ctx.fillStyle = '#ffe4e4';
+            ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('!', obj.x + obj.width / 2 - 4, obj.y + 42);
+          } else if (obj.type === 'goal') {
+            ctx.fillStyle = '#79e69b';
+            ctx.fillRect(obj.x + 30, obj.y - 120, 8, 120);
+            ctx.beginPath();
+            ctx.moveTo(obj.x + 38, obj.y - 118);
+            ctx.lineTo(obj.x + obj.width, obj.y - 92);
+            ctx.lineTo(obj.x + 38, obj.y - 62);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
 
         const loadWorldX = STAGE_LENGTH * (missile.progress / 100);
@@ -276,8 +386,7 @@
         ctx.font = 'bold 16px sans-serif';
         ctx.fillText(`NUCLEAR LOAD ${missile.progress.toFixed(0)}%`, loadWorldX + 12, 34);
 
-        ctx.fillStyle = '#f2f8ff';
-        ctx.fillRect(player.x, player.y, player.width, player.height);
+        drawPlayerSprite();
 
         ctx.restore();
 
