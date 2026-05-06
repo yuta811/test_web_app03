@@ -29,8 +29,8 @@
         jumpPowerFromSpeed: 0.55,
         maxJumpPower: 760,
         gravity: 1450,
-        airFloatStrength: 4.5,
-        airBrake: 420,
+        airFloatStrength: 7.2,
+        airBrake: 760,
         minAirSpeed: 120,
         width: 42,
         height: 58
@@ -86,7 +86,7 @@
       const intersect = (a,b)=> a.x < b.x+b.width && a.x+a.width > b.x && a.y < b.y+b.height && a.y+a.height > b.y;
       const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
 
-      const FIXED_VIEW = { w: 720, h: 1280 };
+      const FIXED_VIEW = { w: 1280, h: 720 };
       let viewport = { w: FIXED_VIEW.w, h: FIXED_VIEW.h };
 
       function resize() {
