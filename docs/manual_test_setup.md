@@ -3,8 +3,10 @@
 ## 1) セットアップ
 ```bash
 npm install
-npx playwright install chromium
+npm run test:setup
 ```
+
+> `npm run test:setup` は Playwright の Chromium を取得します。
 
 ## 2) ローカル起動（手動操作）
 ```bash
@@ -18,7 +20,10 @@ npx http-server . -p 4173 -c-1
 
 ## 3) E2E テスト
 ```bash
-npm run test:e2e
+npm test
 ```
+
+- `npm test` は `npm run test:e2e` を実行します。
+- `test:e2e` は `npx playwright test` を使うため、`node_modules/.bin` 依存の失敗を避けられます。
 
 Playwright 設定は `playwright.config.js` を参照。
