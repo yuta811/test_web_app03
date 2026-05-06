@@ -10,17 +10,10 @@
     html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #06080f; font-family: Inter, system-ui, -apple-system, sans-serif; }
     #app { position: fixed; inset: 0; }
     canvas { width: 100%; height: 100%; display: block; }
-    #rotateOverlay {
-      position: fixed; inset: 0; display: none; place-items: center; text-align: center;
-      background: rgba(0,0,0,.85); color: #fff; font-weight: 700; letter-spacing: .08em; z-index: 10;
-      padding: 24px;
-    }
-    #rotateOverlay.show { display: grid; }
   </style>
 </head>
 <body>
   <div id="app"><canvas id="gameCanvas"></canvas></div>
-  <div id="rotateOverlay">スマホを横向きにしてください</div>
 
   <script>
     (() => {
@@ -49,7 +42,6 @@
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
-      const rotateOverlay = document.getElementById('rotateOverlay');
 
       const state = {
         mode: GameState.TITLE,
@@ -94,24 +86,33 @@
       const intersect = (a,b)=> a.x < b.x+b.width && a.x+a.width > b.x && a.y < b.y+b.height && a.y+a.height > b.y;
       const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
 
+      let viewport = { w: innerWidth, h: innerHeight, portraitLockedPlay: false };
+
       function resize() {
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(innerWidth * dpr);
-        canvas.height = Math.floor(innerHeight * dpr);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      }
+        viewport.portraitLockedPlay = innerHeight > innerWidth;
+        viewport.w = viewport.portraitLockedPlay ? innerHeight : innerWidth;
+        viewport.h = viewport.portraitLockedPlay ? innerWidth : innerHeight;
 
-      function handleOrientation() {
-        const landscape = innerWidth > innerHeight;
-        if (!landscape) {
-          rotateOverlay.classList.add('show');
-          if (state.mode === GameState.PLAYING || state.mode === GameState.READY) {
-            state.prevMode = state.mode;
-            state.mode = GameState.PAUSED;
-          }
+        canvas.width = Math.floor(viewport.w * dpr);
+        canvas.height = Math.floor(viewport.h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        if (viewport.portraitLockedPlay) {
+          canvas.style.width = `${innerHeight}px`;
+          canvas.style.height = `${innerWidth}px`;
+          canvas.style.transformOrigin = 'center center';
+          canvas.style.transform = 'translate(-50%, -50%) rotate(-90deg)';
+          canvas.style.position = 'fixed';
+          canvas.style.left = '50%';
+          canvas.style.top = '50%';
         } else {
-          rotateOverlay.classList.remove('show');
-          if (state.mode === GameState.PAUSED) state.mode = state.prevMode;
+          canvas.style.width = '100%';
+          canvas.style.height = '100%';
+          canvas.style.transform = 'none';
+          canvas.style.position = 'static';
+          canvas.style.left = '';
+          canvas.style.top = '';
         }
       }
 
@@ -226,9 +227,9 @@
         if (loadWorldX >= player.x) return endGame(false, 'OVERRUN BY LOAD SEQUENCE');
         state.warningPulse = clamp((300 - dangerDistance) / 300, 0, 1);
 
-        const targetCam = player.x - innerWidth * 0.35;
+        const targetCam = player.x - viewport.w * 0.35;
         state.camX += (targetCam - state.camX) * 0.12;
-        state.camX = clamp(state.camX, 0, STAGE_LENGTH - innerWidth + 240);
+        state.camX = clamp(state.camX, 0, STAGE_LENGTH - viewport.w + 240);
         state.bestSpeed = Math.max(state.bestSpeed, player.vx);
       }
 
@@ -244,7 +245,7 @@
       }
 
       function draw() {
-        const w = innerWidth, h = innerHeight;
+        const w = viewport.w, h = viewport.h;
         ctx.fillStyle = '#080b16'; ctx.fillRect(0,0,w,h);
 
         ctx.save();
@@ -304,7 +305,7 @@
       }
 
       function overlay(title, subtitle) {
-        const w = innerWidth, h = innerHeight;
+        const w = viewport.w, h = viewport.h;
         ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0,0,w,h);
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
@@ -321,8 +322,7 @@
         requestAnimationFrame(loop);
       }
 
-      window.addEventListener('resize', () => { resize(); handleOrientation(); });
-      window.addEventListener('orientationchange', handleOrientation);
+      window.addEventListener('resize', resize);
       window.addEventListener('pointerdown', (e) => { e.preventDefault(); press(); });
       window.addEventListener('pointerup', (e) => { e.preventDefault(); release(); });
       window.addEventListener('pointercancel', release);
@@ -330,10 +330,10 @@
         if (state.mode === GameState.PLAYING || state.mode === GameState.READY) { state.prevMode = state.mode; state.mode = GameState.PAUSED; }
       });
       window.addEventListener('focus', () => {
-        if (state.mode === GameState.PAUSED && innerWidth > innerHeight) state.mode = state.prevMode;
+        if (state.mode === GameState.PAUSED) state.mode = state.prevMode;
       });
 
-      resize(); handleOrientation(); requestAnimationFrame(loop);
+      resize(); requestAnimationFrame(loop);
     })();
   </script>
 </body>
