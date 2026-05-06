@@ -39,6 +39,8 @@
       const MISSILE = { timeLimit: 60, baseLoadSpeed: 100 / 60 };
       const STAGE_LENGTH = 6000;
       const FALL_DEATH_Y = 1100;
+      const GAME_VERSION = 'v1.1.0';
+      // NOTE: 改修時は必ず GAME_VERSION を更新すること。
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
@@ -55,6 +57,7 @@
         loadNoiseHit: false,
         loadNoiseTaken: 0,
         warningPulse: 0,
+        hitFlashTimer: 0,
       };
 
       const player = {
@@ -65,6 +68,7 @@
 
       const missile = { progress: 0 };
 
+      const GOAL_X = 5880;
       const levelObjects = [
         { type: 'platform', x: 0, y: 520, width: 820, height: 80 },
         { type: 'platform', x: 980, y: 520, width: 620, height: 80 },
@@ -80,7 +84,7 @@
         { type: 'platform', x: 4940, y: 500, width: 220, height: 80 },
         { type: 'platform', x: 5260, y: 520, width: 840, height: 80 },
         { type: 'load_noise', x: 3620, y: 460, width: 54, height: 60, loadMultiplier: 1.8, duration: 3 },
-        { type: 'goal', x: 5880, y: 430, width: 80, height: 90 }
+        { type: 'goal', x: GOAL_X, y: 430, width: 80, height: 90 }
       ];
 
       const intersect = (a,b)=> a.x < b.x+b.width && a.x+a.width > b.x && a.y < b.y+b.height && a.y+a.height > b.y;
@@ -157,6 +161,7 @@
         if (state.mode !== GameState.PLAYING) return;
 
         state.gameTime += dt;
+        state.hitFlashTimer = Math.max(0, state.hitFlashTimer - dt);
         for (const k in player.effects) player.effects[k] = Math.max(0, player.effects[k] - dt);
 
         let gravity = PLAYER.gravity;
@@ -201,24 +206,33 @@
           if (obj.type === 'slow_floor') {
             player.vx = Math.max(80, player.vx - obj.slowPower * dt);
             state.slowHit = true;
+            state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22);
           } else if (obj.type === 'boost_floor') {
             player.vx = Math.max(player.vx, obj.boostPower + 220);
           } else if (obj.type === 'gravity_zone') {
             player.effects.heavyGravityTimer = Math.max(player.effects.heavyGravityTimer, obj.duration);
+            state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22);
           } else if (obj.type === 'load_noise') {
             player.effects.loadBoostTimer = Math.max(player.effects.loadBoostTimer, obj.duration);
             if (!state.loadNoiseHit) { state.loadNoiseTaken++; state.loadNoiseHit = true; }
+            state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.28);
           } else if (obj.type === 'goal') {
             return endGame(true, 'ABORT COMPLETE');
           }
         }
 
         if (player.x + player.width < 3600 || player.x > 3700) state.loadNoiseHit = false;
-        if (player.y > FALL_DEATH_Y) return endGame(false, 'SIGNAL LOST');
+        if (player.y > FALL_DEATH_Y) {
+          if (Math.abs(player.vx) <= 0.01) {
+            respawnNearPlatform();
+          } else {
+            return endGame(false, 'SIGNAL LOST');
+          }
+        }
 
         const loadWorldX = STAGE_LENGTH * (missile.progress / 100);
-        const dangerDistance = player.x - loadWorldX;
-        if (loadWorldX >= player.x) return endGame(false, 'OVERRUN BY LOAD SEQUENCE');
+        const dangerDistance = GOAL_X - loadWorldX;
+        if (loadWorldX >= GOAL_X) return endGame(false, 'LOAD SEQUENCE REACHED GOAL');
         state.warningPulse = clamp((300 - dangerDistance) / 300, 0, 1);
 
         const targetCam = player.x - viewport.w * 0.35;
@@ -296,6 +310,42 @@
           ctx.fillStyle = `rgba(255,80,80,${0.25 * state.warningPulse})`;
           ctx.fillRect(0, 0, w, h);
         }
+
+        if (state.hitFlashTimer > 0 && state.mode === GameState.PLAYING) {
+          const alpha = clamp(state.hitFlashTimer / 0.28, 0, 1) * 0.5;
+          ctx.fillStyle = `rgba(255, 110, 110, ${alpha})`;
+          ctx.fillRect(0, 0, w, h);
+          ctx.strokeStyle = `rgba(255, 180, 180, ${alpha})`;
+          ctx.lineWidth = 10;
+          ctx.strokeRect(0, 0, w, h);
+        }
+
+        ctx.fillStyle = 'rgba(210,220,255,.72)';
+        ctx.font = '12px monospace';
+        ctx.fillText(`ver ${GAME_VERSION}`, w - 108, h - 12);
+      }
+
+      function respawnNearPlatform() {
+        let nearest = null;
+        let nearestDist = Infinity;
+        for (const obj of levelObjects) {
+          if (obj.type !== 'platform') continue;
+          const platformTop = obj.y - player.height;
+          const candidateX = clamp(player.x, obj.x + 18, obj.x + obj.width - player.width - 18);
+          const dx = Math.abs(candidateX - player.x);
+          const dy = Math.abs(platformTop - player.y);
+          const dist = dx + dy;
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = { x: candidateX, y: platformTop };
+          }
+        }
+        if (!nearest) return endGame(false, 'SIGNAL LOST');
+        player.x = nearest.x;
+        player.y = nearest.y;
+        player.vx = 0;
+        player.vy = 0;
+        player.grounded = true;
       }
 
       function overlay(title, subtitle) {
