@@ -86,24 +86,34 @@
       const intersect = (a,b)=> a.x < b.x+b.width && a.x+a.width > b.x && a.y < b.y+b.height && a.y+a.height > b.y;
       const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
 
-      let viewport = { w: innerWidth, h: innerHeight, isPortrait: false };
+      let viewport = { w: innerWidth, h: innerHeight, portraitLockedPlay: false };
 
       function resize() {
         const dpr = window.devicePixelRatio || 1;
-        viewport.isPortrait = innerHeight > innerWidth;
-        viewport.w = innerWidth;
-        viewport.h = innerHeight;
+        viewport.portraitLockedPlay = innerHeight > innerWidth;
+        viewport.w = viewport.portraitLockedPlay ? innerHeight : innerWidth;
+        viewport.h = viewport.portraitLockedPlay ? innerWidth : innerHeight;
 
         canvas.width = Math.floor(viewport.w * dpr);
         canvas.height = Math.floor(viewport.h * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-        canvas.style.transform = 'none';
-        canvas.style.position = 'static';
-        canvas.style.left = '';
-        canvas.style.top = '';
+        if (viewport.portraitLockedPlay) {
+          canvas.style.width = `${innerHeight}px`;
+          canvas.style.height = `${innerWidth}px`;
+          canvas.style.transformOrigin = 'center center';
+          canvas.style.transform = 'translate(-50%, -50%) rotate(-90deg)';
+          canvas.style.position = 'fixed';
+          canvas.style.left = '50%';
+          canvas.style.top = '50%';
+        } else {
+          canvas.style.width = '100%';
+          canvas.style.height = '100%';
+          canvas.style.transform = 'none';
+          canvas.style.position = 'static';
+          canvas.style.left = '';
+          canvas.style.top = '';
+        }
       }
 
       function press() {
@@ -142,7 +152,6 @@
         state.loadNoiseTaken = 0;
         state.slowHit = false;
         state.loadNoiseHit = false;
-        state.camY = 0;
       }
 
       function update(dt) {
@@ -151,16 +160,6 @@
           if (state.readyTimer <= 0) state.mode = GameState.PLAYING;
           return;
         }
-        if (viewport.isPortrait) {
-          if (state.mode === GameState.PLAYING || state.mode === GameState.READY) state.prevMode = state.mode;
-          state.mode = GameState.PAUSED;
-          return;
-        }
-
-        if (state.mode === GameState.PAUSED && !viewport.isPortrait) {
-          state.mode = state.prevMode === GameState.PAUSED ? GameState.TITLE : state.prevMode;
-        }
-
         if (state.mode !== GameState.PLAYING) return;
 
         state.gameTime += dt;
@@ -231,10 +230,6 @@
         const targetCam = player.x - viewport.w * 0.35;
         state.camX += (targetCam - state.camX) * 0.12;
         state.camX = clamp(state.camX, 0, STAGE_LENGTH - viewport.w + 240);
-
-        const targetCamY = clamp(player.y - viewport.h * 0.62, -20, 260);
-        state.camY = state.camY ?? 0;
-        state.camY += (targetCamY - state.camY) * 0.12;
         state.bestSpeed = Math.max(state.bestSpeed, player.vx);
       }
 
@@ -254,8 +249,7 @@
         ctx.fillStyle = '#080b16'; ctx.fillRect(0,0,w,h);
 
         ctx.save();
-        state.camY = state.camY ?? 0;
-        ctx.translate(-state.camX, -state.camY);
+        ctx.translate(-state.camX, 0);
 
         ctx.fillStyle = '#141b2a';
         for (let i = 0; i < 40; i++) ctx.fillRect(i*180, 70 + (i%3)*24, 120, 8);
@@ -299,8 +293,6 @@
           overlay('ABORT COMPLETE', `TIME ${state.gameTime.toFixed(2)}s / LOAD ${missile.progress.toFixed(1)}% / RANK ${rank()}\nTAP TO TITLE`);
         } else if (state.mode === GameState.GAME_OVER) {
           overlay('MISSION FAILED', `${endMessage}\nTAP TO TITLE`);
-        } else if (state.mode === GameState.PAUSED) {
-          overlay('PAUSED', viewport.isPortrait ? 'スマホを横向きにしてください' : 'TAP TO RESUME');
         }
 
         if (state.warningPulse > 0 && state.mode === GameState.PLAYING) {
