@@ -22,24 +22,28 @@
       const MISSILE = { timeLimit: 60, baseLoadSpeed: 100 / 60 };
       const STAGE_LENGTH = 6000;
       const FALL_DEATH_Y = 1100;
-      const GAME_VERSION = 'v1.3.0';
+      const GAME_VERSION = 'v1.4.0';
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
       const particles = [];
 
-      const state = { mode: GameState.TITLE, prevMode: GameState.TITLE, readyTimer: 1, camX: 0, hold: false, gameTime: 0, bestSpeed: 0, slowHit: false, loadNoiseHit: false, loadNoiseTaken: 0, warningPulse: 0, hitFlashTimer: 0, pulseTime: 0 };
+      const state = { mode: GameState.TITLE, prevMode: GameState.TITLE, readyTimer: 0.7, camX: 0, hold: false, gameTime: 0, bestSpeed: 0, loadNoiseHit: false, loadNoiseTaken: 0, warningPulse: 0, hitFlashTimer: 0, pulseTime: 0, delayCoreTaken: 0 };
+      let readyTimeoutId = null;
       const player = { x: 80, y: 420, vx: 0, vy: 0, width: PLAYER.width, height: PLAYER.height, grounded: true, effects: { heavyGravityTimer: 0, loadBoostTimer: 0 } };
       const missile = { progress: 0 };
 
       const GOAL_X = 5880;
       const levelObjects = [
         { type: 'platform', x: 0, y: 520, width: 820, height: 80 }, { type: 'platform', x: 980, y: 520, width: 620, height: 80 }, { type: 'platform', x: 1770, y: 520, width: 540, height: 80 },
-        { type: 'slow_floor', x: 1920, y: 500, width: 260, height: 20, slowPower: 230 }, { type: 'platform', x: 2380, y: 520, width: 760, height: 80 },
-        { type: 'boost_floor', x: 2460, y: 500, width: 200, height: 20, boostPower: 350 }, { type: 'platform', x: 3190, y: 520, width: 510, height: 80 },
-        { type: 'gravity_zone', x: 3190, y: 260, width: 260, height: 260, gravityMultiplier: 1.6, duration: 2.5 }, { type: 'platform', x: 3900, y: 520, width: 260, height: 80 },
+        { type: 'mud_floor', x: 1880, y: 498, width: 300, height: 22, slowPower: 260 }, { type: 'platform', x: 2380, y: 520, width: 760, height: 80 },
+        { type: 'boost_pad', x: 2460, y: 496, width: 220, height: 24, boostPower: 390 }, { type: 'platform', x: 3190, y: 520, width: 510, height: 80 },
+        { type: 'headwind_zone', x: 3160, y: 240, width: 300, height: 280, gravityMultiplier: 1.58, duration: 2.2 }, { type: 'platform', x: 3900, y: 520, width: 260, height: 80 },
         { type: 'platform', x: 4300, y: 500, width: 220, height: 80 }, { type: 'platform', x: 4620, y: 470, width: 220, height: 80 }, { type: 'platform', x: 4940, y: 500, width: 220, height: 80 },
-        { type: 'platform', x: 5260, y: 520, width: 840, height: 80 }, { type: 'load_noise', x: 3620, y: 460, width: 54, height: 60, loadMultiplier: 1.8, duration: 3 },
+        { type: 'platform', x: 5260, y: 520, width: 840, height: 80 },
+        { type: 'jammer_spike', x: 3600, y: 460, width: 62, height: 60, loadMultiplier: 1.65, duration: 2.6 },
+        { type: 'laser_gate', x: 4180, y: 0, width: 32, height: 520 },
+        { type: 'delay_core', x: 4725, y: 410, width: 48, height: 48, loadReduce: 6.5, consumed: false },
         { type: 'goal', x: GOAL_X, y: 430, width: 80, height: 90 }
       ];
 
@@ -83,7 +87,12 @@
 
       function press() {
         initAudio(); state.hold = true;
-        if (state.mode === GameState.TITLE) { resetGame(); state.mode = GameState.READY; sfx(660, 'square', .1, .07); return; }
+        if (state.mode === GameState.TITLE) {
+          resetGame(); state.mode = GameState.READY; sfx(660, 'square', .1, .07);
+          if (readyTimeoutId) clearTimeout(readyTimeoutId);
+          readyTimeoutId = setTimeout(() => { if (state.mode === GameState.READY) state.mode = GameState.PLAYING; }, state.readyTimer * 1000);
+          return;
+        }
         if (state.mode === GameState.CLEAR || state.mode === GameState.GAME_OVER) state.mode = GameState.TITLE;
       }
       function release() {
@@ -96,7 +105,7 @@
         state.hold = false;
       }
 
-      function resetGame() { Object.assign(player, { x:80,y:420,vx:0,vy:0,grounded:true }); player.effects.heavyGravityTimer = 0; player.effects.loadBoostTimer = 0; missile.progress = 0; state.readyTimer = 1; state.gameTime = 0; state.bestSpeed = 0; state.loadNoiseTaken = 0; state.slowHit = false; state.loadNoiseHit = false; }
+      function resetGame() { Object.assign(player, { x:80,y:420,vx:0,vy:0,grounded:true }); player.effects.heavyGravityTimer = 0; player.effects.loadBoostTimer = 0; missile.progress = 0; state.readyTimer = 0.7; state.gameTime = 0; state.bestSpeed = 0; state.loadNoiseTaken = 0; state.delayCoreTaken = 0; state.loadNoiseHit = false; for (const obj of levelObjects) if (obj.type === 'delay_core') obj.consumed = false; }
 
       function update(dt) {
         state.pulseTime += dt;
@@ -104,7 +113,7 @@
         if (state.mode !== GameState.PLAYING) return;
         state.gameTime += dt; state.hitFlashTimer = Math.max(0, state.hitFlashTimer - dt);
         for (const k in player.effects) player.effects[k] = Math.max(0, player.effects[k] - dt);
-        let gravity = PLAYER.gravity; if (player.effects.heavyGravityTimer > 0) gravity *= 1.6;
+        let gravity = PLAYER.gravity; if (player.effects.heavyGravityTimer > 0) gravity *= 1.58;
         let loadSpeed = MISSILE.baseLoadSpeed; if (player.effects.loadBoostTimer > 0) loadSpeed *= 1.8;
         missile.progress = Math.min(100, missile.progress + loadSpeed * dt); if (missile.progress >= 100) return endGame(false, 'MISSILE LAUNCHED');
         if (player.grounded) { if (state.hold) player.vx = Math.min(PLAYER.maxGroundSpeed, player.vx + PLAYER.groundAcceleration * dt); }
@@ -116,10 +125,17 @@
         const rect = { x: player.x, y: player.y, width: player.width, height: player.height };
         for (const obj of levelObjects) {
           if (!intersect(rect, obj)) continue;
-          if (obj.type === 'slow_floor') { player.vx = Math.max(80, player.vx - obj.slowPower * dt); state.slowHit = true; state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22); sfx(190, 'sawtooth', .08, .06); }
-          else if (obj.type === 'boost_floor') { player.vx = Math.max(player.vx, obj.boostPower + 220); sfx(820, 'triangle', .1, .06); }
-          else if (obj.type === 'gravity_zone') { player.effects.heavyGravityTimer = Math.max(player.effects.heavyGravityTimer, obj.duration); state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22); }
-          else if (obj.type === 'load_noise') { player.effects.loadBoostTimer = Math.max(player.effects.loadBoostTimer, obj.duration); if (!state.loadNoiseHit) { state.loadNoiseTaken++; state.loadNoiseHit = true; sfx(120, 'square', .16, .07); } state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.28); }
+          if (obj.type === 'mud_floor') { player.vx = Math.max(95, player.vx - obj.slowPower * dt); state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.18); sfx(180, 'sawtooth', .07, .05); }
+          else if (obj.type === 'boost_pad') { player.vx = Math.max(player.vx, obj.boostPower + 220); sfx(820, 'triangle', .1, .06); }
+          else if (obj.type === 'headwind_zone') { player.effects.heavyGravityTimer = Math.max(player.effects.heavyGravityTimer, obj.duration); state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22); }
+          else if (obj.type === 'jammer_spike') { player.effects.loadBoostTimer = Math.max(player.effects.loadBoostTimer, obj.duration); if (!state.loadNoiseHit) { state.loadNoiseTaken++; state.loadNoiseHit = true; sfx(120, 'square', .16, .07); } state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.28); }
+          else if (obj.type === 'laser_gate') { return endGame(false, 'LASER CONTACT'); }
+          else if (obj.type === 'delay_core' && !obj.consumed) {
+            obj.consumed = true;
+            missile.progress = Math.max(0, missile.progress - obj.loadReduce);
+            state.delayCoreTaken++;
+            sfx(560, 'triangle', .16, .08);
+          }
         }
 
         if (hasReachedGoalLine()) return endGame(true, 'ABORT COMPLETE');
@@ -157,10 +173,42 @@
         ctx.save(); ctx.translate(-state.camX, 0);
         for (const obj of levelObjects) {
           if (obj.type === 'platform') { const g = ctx.createLinearGradient(0, obj.y, 0, obj.y + obj.height); g.addColorStop(0, '#465272'); g.addColorStop(1, '#242d42'); ctx.fillStyle = g; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }
-          if (obj.type === 'slow_floor') { ctx.fillStyle = '#394d96'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }
-          if (obj.type === 'boost_floor') { ctx.fillStyle = '#27d6ff'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }
-          if (obj.type === 'gravity_zone') { ctx.fillStyle = 'rgba(172,116,255,.28)'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }
-          if (obj.type === 'load_noise') { ctx.fillStyle = '#ec4f67'; ctx.beginPath(); ctx.moveTo(obj.x + obj.width / 2, obj.y); ctx.lineTo(obj.x + obj.width, obj.y + obj.height); ctx.lineTo(obj.x, obj.y + obj.height); ctx.closePath(); ctx.fill(); }
+          if (obj.type === 'mud_floor') {
+            ctx.fillStyle = '#5f4228'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+            ctx.strokeStyle = 'rgba(161,120,83,.8)'; ctx.lineWidth = 2;
+            for (let i = 0; i < obj.width; i += 28) { ctx.beginPath(); ctx.arc(obj.x + i + 14, obj.y + 12 + Math.sin((state.pulseTime * 4) + i * 0.1) * 2, 6, 0, Math.PI); ctx.stroke(); }
+          }
+          if (obj.type === 'boost_pad') {
+            ctx.fillStyle = '#28d7ff'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+            ctx.fillStyle = '#d5f7ff';
+            for (let i = 0; i < 4; i++) {
+              const bx = obj.x + 18 + i * 48;
+              ctx.beginPath(); ctx.moveTo(bx, obj.y + 4); ctx.lineTo(bx + 20, obj.y + obj.height / 2); ctx.lineTo(bx, obj.y + obj.height - 4); ctx.closePath(); ctx.fill();
+            }
+          }
+          if (obj.type === 'headwind_zone') {
+            ctx.fillStyle = 'rgba(172,116,255,.24)'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+            ctx.strokeStyle = 'rgba(215,180,255,.65)';
+            for (let y = obj.y + 24; y < obj.y + obj.height; y += 34) { ctx.beginPath(); ctx.moveTo(obj.x + 18, y); ctx.quadraticCurveTo(obj.x + obj.width / 2, y - 12, obj.x + obj.width - 18, y); ctx.stroke(); }
+          }
+          if (obj.type === 'jammer_spike') { ctx.fillStyle = '#ec4f67'; ctx.beginPath(); ctx.moveTo(obj.x + obj.width / 2, obj.y); ctx.lineTo(obj.x + obj.width, obj.y + obj.height); ctx.lineTo(obj.x, obj.y + obj.height); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#fff3f5'; ctx.fillText('!', obj.x + obj.width / 2 - 3, obj.y + 42); }
+          if (obj.type === 'laser_gate') {
+            const alpha = 0.5 + Math.sin(state.pulseTime * 9) * 0.25;
+            ctx.fillStyle = `rgba(255,40,40,${alpha})`; ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+            ctx.fillStyle = 'rgba(255,170,170,.5)'; ctx.fillRect(obj.x + 10, obj.y, 8, obj.height);
+          }
+          if (obj.type === 'delay_core' && !obj.consumed) {
+            ctx.fillStyle = '#53ff8c';
+            const cx = obj.x + obj.width / 2; const cy = obj.y + obj.height / 2;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+              const ang = Math.PI / 3 * i + state.pulseTime * 0.4;
+              const px = cx + Math.cos(ang) * 24; const py = cy + Math.sin(ang) * 24;
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#0f3f24'; ctx.fillText('↓', cx - 6, cy + 7);
+          }
           if (obj.type === 'goal') { ctx.fillStyle = '#93fda5'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); ctx.fillStyle = '#113828'; ctx.fillText('GOAL', obj.x + 14, obj.y + 50); }
         }
 
@@ -170,7 +218,7 @@
         for (const p of particles) { ctx.fillStyle = `rgba(${p.color},${Math.max(0,p.life*2)})`; ctx.beginPath(); ctx.arc(p.x, p.y, 2.8, 0, Math.PI*2); ctx.fill(); }
         ctx.restore();
 
-        ctx.fillStyle = '#e8f3ff'; ctx.font = 'bold 18px sans-serif'; ctx.fillText(`LOAD ${missile.progress.toFixed(1)}%`, 14, 28); ctx.fillText(`DIST ${((STAGE_LENGTH - player.x)/3).toFixed(0)}m`, 14, 52);
+        ctx.fillStyle = '#e8f3ff'; ctx.font = 'bold 18px sans-serif'; ctx.fillText(`LOAD ${missile.progress.toFixed(1)}%`, 14, 28); ctx.fillText(`DIST ${((STAGE_LENGTH - player.x)/3).toFixed(0)}m`, 14, 52); ctx.fillText(`SPD ${player.vx.toFixed(0)}`, 14, 76);
         ctx.fillStyle = '#2a2f3f'; ctx.fillRect(180, 12, w - 200, 12); ctx.fillStyle = '#ff5252'; ctx.fillRect(180, 12, (w - 200) * (missile.progress / 100), 12);
 
         if (state.mode === GameState.TITLE) overlay('ABORT RUN', 'HOLD to sprint / RELEASE to jump\nTAP TO START');
