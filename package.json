@@ -4,9 +4,10 @@
   "version": "1.0.0",
   "scripts": {
     "test": "npm run test:e2e",
-    "test:setup": "npx playwright install --with-deps chromium",
-    "test:e2e": "npx playwright test",
-    "test:bootstrap": "bash scripts/test-bootstrap.sh"
+    "test:setup": "npx --no-install playwright install --with-deps chromium",
+    "test:e2e": "npx --no-install playwright test",
+    "test:bootstrap": "bash scripts/test-bootstrap.sh",
+    "pretest": "npm install && npx --no-install playwright install --with-deps chromium"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",

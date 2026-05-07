@@ -1,24 +1,24 @@
 # 実機操作テスト環境
 
-新しいタスク開始時は、まず次を実行してください（毎回同じ手順でOK）。
+新しいタスク開始直後（`node_modules` が空の状態）でも、`npm test` だけで Playwright E2E が実行できるようにしています。
 
+## 0) 最短手順（推奨）
+```bash
+npm test
+```
+
+`npm test` 実行時に `pretest` が先に走り、自動で `npm install` されます。
+これにより「新しいタスクごとに `@playwright/test` が見つからない」エラーを回避できます。
+
+## 1) 初回セットアップを明示的に実行する場合
 ```bash
 npm run test:bootstrap
 ```
 
 このコマンドは以下を順に実行します。
 - `npm install`
-- `npx playwright install chromium`
-- `npx playwright install-deps chromium`（失敗時は必要な再実行コマンドを表示）
-
-## 1) セットアップ（手動実行したい場合）
-```bash
-npm install
-npx playwright install chromium
-sudo npx playwright install-deps chromium
-```
-
-> `libatk-1.0.so.0` などの不足エラーは、OS依存パッケージ未導入が原因です。
+- `npx --no-install playwright install chromium`
+- `npx --no-install playwright install-deps chromium`（失敗時は必要な再実行コマンドを表示）
 
 ## 2) ローカル起動（手動操作）
 ```bash
@@ -35,7 +35,7 @@ npx http-server . -p 4173 -c-1
 npm test
 ```
 
-- `npm test` は `npm run test:e2e` を実行します。
-- `test:e2e` は `npx playwright test` を使うため、`node_modules/.bin` 依存の失敗を避けられます。
+- `npm test` は `pretest` → `test:e2e` の順で実行されます。
+- `test:e2e` は `npx --no-install playwright test` を使い、タスク環境で別バージョンの Playwright が勝手に入る事故を防ぎます。
 
 Playwright 設定は `playwright.config.js` を参照。
