@@ -115,6 +115,13 @@
         canvas.style.transform = 'translate(-50%, -50%)';
       }
 
+
+      window.__ABORT_RUN_DEBUG__ = {
+        getMode: () => state.mode,
+        getPlayer: () => ({ x: player.x, y: player.y, vx: player.vx, vy: player.vy, grounded: player.grounded }),
+        getMissileProgress: () => missile.progress
+      };
+
       function press() {
         state.hold = true;
         if (state.mode === GameState.TITLE) {
