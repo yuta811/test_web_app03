@@ -7,9 +7,9 @@
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; -webkit-user-select: none; user-select: none; touch-action: none; }
-    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #06080f; font-family: Inter, system-ui, -apple-system, sans-serif; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at top, #101833 0%, #04060d 65%); font-family: Inter, system-ui, -apple-system, sans-serif; }
     #app { position: fixed; inset: 0; }
-    canvas { width: 100%; height: 100%; display: block; }
+    canvas { width: 100%; height: 100%; display: block; filter: drop-shadow(0 0 16px rgba(101, 185, 255, .12)); }
   </style>
 </head>
 <body>
@@ -17,102 +17,61 @@
 
   <script>
     (() => {
-      const GameState = {
-        TITLE: 'title', READY: 'ready', PLAYING: 'playing', CLEAR: 'clear', GAME_OVER: 'game_over', PAUSED: 'paused'
-      };
-
-      const PLAYER = {
-        groundAcceleration: 900,
-        maxGroundSpeed: 650,
-        minJumpPower: 520,
-        baseJumpPower: 455,
-        jumpPowerFromSpeed: 0.72,
-        maxJumpPower: 920,
-        gravity: 1450,
-        airFloatStrength: 13.2,
-        airBrake: 420,
-        minAirSpeed: 120,
-        width: 42,
-        height: 58
-      };
-
+      const GameState = { TITLE: 'title', READY: 'ready', PLAYING: 'playing', CLEAR: 'clear', GAME_OVER: 'game_over', PAUSED: 'paused' };
+      const PLAYER = { groundAcceleration: 900, maxGroundSpeed: 650, minJumpPower: 520, baseJumpPower: 455, jumpPowerFromSpeed: 0.72, maxJumpPower: 920, gravity: 1450, airFloatStrength: 13.2, airBrake: 420, minAirSpeed: 120, width: 42, height: 58 };
       const MISSILE = { timeLimit: 60, baseLoadSpeed: 100 / 60 };
       const STAGE_LENGTH = 6000;
       const FALL_DEATH_Y = 1100;
-      const GAME_VERSION = 'v1.2.2';
-      // NOTE: 改修時は必ず GAME_VERSION を更新すること。
+      const GAME_VERSION = 'v1.3.0';
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
+      const particles = [];
 
-      const state = {
-        mode: GameState.TITLE,
-        prevMode: GameState.TITLE,
-        readyTimer: 3,
-        camX: 0,
-        hold: false,
-        gameTime: 0,
-        bestSpeed: 0,
-        slowHit: false,
-        loadNoiseHit: false,
-        loadNoiseTaken: 0,
-        warningPulse: 0,
-        hitFlashTimer: 0,
-      };
-
-      const player = {
-        x: 80, y: 420, vx: 0, vy: 0, width: PLAYER.width, height: PLAYER.height,
-        grounded: true,
-        effects: { heavyGravityTimer: 0, loadBoostTimer: 0 }
-      };
-
+      const state = { mode: GameState.TITLE, prevMode: GameState.TITLE, readyTimer: 1, camX: 0, hold: false, gameTime: 0, bestSpeed: 0, slowHit: false, loadNoiseHit: false, loadNoiseTaken: 0, warningPulse: 0, hitFlashTimer: 0, pulseTime: 0 };
+      const player = { x: 80, y: 420, vx: 0, vy: 0, width: PLAYER.width, height: PLAYER.height, grounded: true, effects: { heavyGravityTimer: 0, loadBoostTimer: 0 } };
       const missile = { progress: 0 };
 
       const GOAL_X = 5880;
       const levelObjects = [
-        { type: 'platform', x: 0, y: 520, width: 820, height: 80 },
-        { type: 'platform', x: 980, y: 520, width: 620, height: 80 },
-        { type: 'platform', x: 1770, y: 520, width: 540, height: 80 },
-        { type: 'slow_floor', x: 1920, y: 500, width: 260, height: 20, slowPower: 230 },
-        { type: 'platform', x: 2380, y: 520, width: 760, height: 80 },
-        { type: 'boost_floor', x: 2460, y: 500, width: 200, height: 20, boostPower: 350 },
-        { type: 'platform', x: 3190, y: 520, width: 510, height: 80 },
-        { type: 'gravity_zone', x: 3190, y: 260, width: 260, height: 260, gravityMultiplier: 1.6, duration: 2.5 },
-        { type: 'platform', x: 3900, y: 520, width: 260, height: 80 },
-        { type: 'platform', x: 4300, y: 500, width: 220, height: 80 },
-        { type: 'platform', x: 4620, y: 470, width: 220, height: 80 },
-        { type: 'platform', x: 4940, y: 500, width: 220, height: 80 },
-        { type: 'platform', x: 5260, y: 520, width: 840, height: 80 },
-        { type: 'load_noise', x: 3620, y: 460, width: 54, height: 60, loadMultiplier: 1.8, duration: 3 },
+        { type: 'platform', x: 0, y: 520, width: 820, height: 80 }, { type: 'platform', x: 980, y: 520, width: 620, height: 80 }, { type: 'platform', x: 1770, y: 520, width: 540, height: 80 },
+        { type: 'slow_floor', x: 1920, y: 500, width: 260, height: 20, slowPower: 230 }, { type: 'platform', x: 2380, y: 520, width: 760, height: 80 },
+        { type: 'boost_floor', x: 2460, y: 500, width: 200, height: 20, boostPower: 350 }, { type: 'platform', x: 3190, y: 520, width: 510, height: 80 },
+        { type: 'gravity_zone', x: 3190, y: 260, width: 260, height: 260, gravityMultiplier: 1.6, duration: 2.5 }, { type: 'platform', x: 3900, y: 520, width: 260, height: 80 },
+        { type: 'platform', x: 4300, y: 500, width: 220, height: 80 }, { type: 'platform', x: 4620, y: 470, width: 220, height: 80 }, { type: 'platform', x: 4940, y: 500, width: 220, height: 80 },
+        { type: 'platform', x: 5260, y: 520, width: 840, height: 80 }, { type: 'load_noise', x: 3620, y: 460, width: 54, height: 60, loadMultiplier: 1.8, duration: 3 },
         { type: 'goal', x: GOAL_X, y: 430, width: 80, height: 90 }
       ];
 
       const intersect = (a,b)=> a.x < b.x+b.width && a.x+a.width > b.x && a.y < b.y+b.height && a.y+a.height > b.y;
       const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
       const hasReachedGoalLine = () => player.x + player.width >= GOAL_X;
-
       const FIXED_VIEW = { w: 1280, h: 720 };
       let viewport = { w: FIXED_VIEW.w, h: FIXED_VIEW.h };
 
+      let audioCtx; let bgmInterval;
+      const sfx = (freq, type='sine', dur=0.08, gain=0.05) => {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+        o.type = type; o.frequency.value = freq; g.gain.value = gain;
+        o.connect(g).connect(audioCtx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur); o.stop(audioCtx.currentTime + dur);
+      };
+      const initAudio = () => {
+        if (audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        bgmInterval = setInterval(() => {
+          if (state.mode !== GameState.PLAYING) return;
+          [220, 277, 330, 392][Math.floor((performance.now()/420)%4)] && sfx([220,277,330,392][Math.floor((performance.now()/420)%4)], 'triangle', .24, .018);
+        }, 210);
+      };
+
       function resize() {
         const dpr = window.devicePixelRatio || 1;
-        viewport.w = FIXED_VIEW.w;
-        viewport.h = FIXED_VIEW.h;
-
-        canvas.width = Math.floor(viewport.w * dpr);
-        canvas.height = Math.floor(viewport.h * dpr);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
+        viewport.w = FIXED_VIEW.w; viewport.h = FIXED_VIEW.h;
+        canvas.width = Math.floor(viewport.w * dpr); canvas.height = Math.floor(viewport.h * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const scale = Math.min(innerWidth / viewport.w, innerHeight / viewport.h);
-        const cssW = Math.floor(viewport.w * scale);
-        const cssH = Math.floor(viewport.h * scale);
-
-        canvas.style.width = `${cssW}px`;
-        canvas.style.height = `${cssH}px`;
-        canvas.style.position = 'fixed';
-        canvas.style.left = '50%';
-        canvas.style.top = '50%';
-        canvas.style.transform = 'translate(-50%, -50%)';
+        canvas.style.width = `${Math.floor(viewport.w * scale)}px`; canvas.style.height = `${Math.floor(viewport.h * scale)}px`;
+        canvas.style.position = 'fixed'; canvas.style.left = '50%'; canvas.style.top = '50%'; canvas.style.transform = 'translate(-50%, -50%)';
       }
 
 
@@ -123,268 +82,118 @@
       };
 
       function press() {
-        state.hold = true;
-        if (state.mode === GameState.TITLE) {
-          resetGame();
-          state.mode = GameState.READY;
-          return;
-        }
-        if (state.mode === GameState.CLEAR || state.mode === GameState.GAME_OVER) {
-          state.mode = GameState.TITLE;
-        }
+        initAudio(); state.hold = true;
+        if (state.mode === GameState.TITLE) { resetGame(); state.mode = GameState.READY; sfx(660, 'square', .1, .07); return; }
+        if (state.mode === GameState.CLEAR || state.mode === GameState.GAME_OVER) state.mode = GameState.TITLE;
       }
-
       function release() {
         if (state.mode !== GameState.PLAYING) { state.hold = false; return; }
         if (player.grounded) {
-          const jumpPower = clamp(
-            PLAYER.baseJumpPower + player.vx * PLAYER.jumpPowerFromSpeed,
-            PLAYER.minJumpPower,
-            PLAYER.maxJumpPower
-          );
-          player.vy = -jumpPower;
-          player.grounded = false;
+          const jumpPower = clamp(PLAYER.baseJumpPower + player.vx * PLAYER.jumpPowerFromSpeed, PLAYER.minJumpPower, PLAYER.maxJumpPower);
+          player.vy = -jumpPower; player.grounded = false; sfx(480, 'square', .11, .08);
+          for (let i = 0; i < 10; i++) particles.push({ x: player.x + 12 + Math.random()*18, y: player.y + player.height - 4, vx: -80 + Math.random()*160, vy: -40 - Math.random()*100, life: .45, color: '255,221,120' });
         }
         state.hold = false;
       }
 
-      function resetGame() {
-        player.x = 80; player.y = 420; player.vx = 0; player.vy = 0; player.grounded = true;
-        player.effects.heavyGravityTimer = 0; player.effects.loadBoostTimer = 0;
-        missile.progress = 0;
-        state.readyTimer = 3;
-        state.gameTime = 0;
-        state.bestSpeed = 0;
-        state.loadNoiseTaken = 0;
-        state.slowHit = false;
-        state.loadNoiseHit = false;
-      }
+      function resetGame() { Object.assign(player, { x:80,y:420,vx:0,vy:0,grounded:true }); player.effects.heavyGravityTimer = 0; player.effects.loadBoostTimer = 0; missile.progress = 0; state.readyTimer = 1; state.gameTime = 0; state.bestSpeed = 0; state.loadNoiseTaken = 0; state.slowHit = false; state.loadNoiseHit = false; }
 
       function update(dt) {
-        if (state.mode === GameState.READY) {
-          state.readyTimer -= dt;
-          if (state.readyTimer <= 0) state.mode = GameState.PLAYING;
-          return;
-        }
+        state.pulseTime += dt;
+        if (state.mode === GameState.READY) { state.readyTimer -= dt; if (state.readyTimer <= 0) state.mode = GameState.PLAYING; return; }
         if (state.mode !== GameState.PLAYING) return;
-
-        state.gameTime += dt;
-        state.hitFlashTimer = Math.max(0, state.hitFlashTimer - dt);
+        state.gameTime += dt; state.hitFlashTimer = Math.max(0, state.hitFlashTimer - dt);
         for (const k in player.effects) player.effects[k] = Math.max(0, player.effects[k] - dt);
+        let gravity = PLAYER.gravity; if (player.effects.heavyGravityTimer > 0) gravity *= 1.6;
+        let loadSpeed = MISSILE.baseLoadSpeed; if (player.effects.loadBoostTimer > 0) loadSpeed *= 1.8;
+        missile.progress = Math.min(100, missile.progress + loadSpeed * dt); if (missile.progress >= 100) return endGame(false, 'MISSILE LAUNCHED');
+        if (player.grounded) { if (state.hold) player.vx = Math.min(PLAYER.maxGroundSpeed, player.vx + PLAYER.groundAcceleration * dt); }
+        else { if (state.hold) { player.vy += (-player.vy) * PLAYER.airFloatStrength * dt; player.vx = Math.max(PLAYER.minAirSpeed, player.vx - PLAYER.airBrake * dt); } player.vy += gravity * dt; }
 
-        let gravity = PLAYER.gravity;
-        if (player.effects.heavyGravityTimer > 0) gravity *= 1.6;
+        const prevBottom = player.y + player.height; player.x += player.vx * dt; player.y += player.vy * dt; player.grounded = false;
+        for (const obj of levelObjects) if (obj.type === 'platform') { const nextBottom = player.y + player.height; const overlapsX = player.x + player.width > obj.x && player.x < obj.x + obj.width; if (player.vy >= 0 && prevBottom <= obj.y + 6 && nextBottom >= obj.y && overlapsX) { player.y = obj.y - player.height; player.vy = 0; player.grounded = true; } }
 
-        let loadSpeed = MISSILE.baseLoadSpeed;
-        if (player.effects.loadBoostTimer > 0) loadSpeed *= 1.8;
-        missile.progress = Math.min(100, missile.progress + loadSpeed * dt);
-        if (missile.progress >= 100) return endGame(false, 'MISSILE LAUNCHED');
-
-        if (player.grounded) {
-          if (state.hold) player.vx = Math.min(PLAYER.maxGroundSpeed, player.vx + PLAYER.groundAcceleration * dt);
-        } else {
-          if (state.hold) {
-            player.vy += (-player.vy) * PLAYER.airFloatStrength * dt;
-            player.vx = Math.max(PLAYER.minAirSpeed, player.vx - PLAYER.airBrake * dt);
-          }
-          player.vy += gravity * dt;
-        }
-
-        const prevBottom = player.y + player.height;
-        player.x += player.vx * dt;
-        player.y += player.vy * dt;
-
-        player.grounded = false;
-        const pRect = () => ({ x: player.x, y: player.y, width: player.width, height: player.height });
-        for (const obj of levelObjects) {
-          if (obj.type === 'platform') {
-            const nextBottom = player.y + player.height;
-            const overlapsX = player.x + player.width > obj.x && player.x < obj.x + obj.width;
-            if (player.vy >= 0 && prevBottom <= obj.y + 6 && nextBottom >= obj.y && overlapsX) {
-              player.y = obj.y - player.height;
-              player.vy = 0;
-              player.grounded = true;
-            }
-          }
-        }
-
-        const rect = pRect();
+        const rect = { x: player.x, y: player.y, width: player.width, height: player.height };
         for (const obj of levelObjects) {
           if (!intersect(rect, obj)) continue;
-          if (obj.type === 'slow_floor') {
-            player.vx = Math.max(80, player.vx - obj.slowPower * dt);
-            state.slowHit = true;
-            state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22);
-          } else if (obj.type === 'boost_floor') {
-            player.vx = Math.max(player.vx, obj.boostPower + 220);
-          } else if (obj.type === 'gravity_zone') {
-            player.effects.heavyGravityTimer = Math.max(player.effects.heavyGravityTimer, obj.duration);
-            state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22);
-          } else if (obj.type === 'load_noise') {
-            player.effects.loadBoostTimer = Math.max(player.effects.loadBoostTimer, obj.duration);
-            if (!state.loadNoiseHit) { state.loadNoiseTaken++; state.loadNoiseHit = true; }
-            state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.28);
-          }
+          if (obj.type === 'slow_floor') { player.vx = Math.max(80, player.vx - obj.slowPower * dt); state.slowHit = true; state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22); sfx(190, 'sawtooth', .08, .06); }
+          else if (obj.type === 'boost_floor') { player.vx = Math.max(player.vx, obj.boostPower + 220); sfx(820, 'triangle', .1, .06); }
+          else if (obj.type === 'gravity_zone') { player.effects.heavyGravityTimer = Math.max(player.effects.heavyGravityTimer, obj.duration); state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.22); }
+          else if (obj.type === 'load_noise') { player.effects.loadBoostTimer = Math.max(player.effects.loadBoostTimer, obj.duration); if (!state.loadNoiseHit) { state.loadNoiseTaken++; state.loadNoiseHit = true; sfx(120, 'square', .16, .07); } state.hitFlashTimer = Math.max(state.hitFlashTimer, 0.28); }
         }
 
         if (hasReachedGoalLine()) return endGame(true, 'ABORT COMPLETE');
-
         if (player.x + player.width < 3600 || player.x > 3700) state.loadNoiseHit = false;
-        if (player.y > FALL_DEATH_Y) {
-          respawnNearPlatform();
-        }
+        if (player.y > FALL_DEATH_Y) respawnNearPlatform();
 
         const loadWorldX = STAGE_LENGTH * (missile.progress / 100);
-        const dangerDistance = GOAL_X - loadWorldX;
         if (loadWorldX >= GOAL_X) return endGame(false, 'LOAD SEQUENCE REACHED GOAL');
-        state.warningPulse = clamp((300 - dangerDistance) / 300, 0, 1);
+        state.warningPulse = clamp((300 - (GOAL_X - loadWorldX)) / 300, 0, 1);
+        const targetCam = player.x - viewport.w * 0.35; state.camX += (targetCam - state.camX) * 0.12; state.camX = clamp(state.camX, 0, STAGE_LENGTH - viewport.w + 240); state.bestSpeed = Math.max(state.bestSpeed, player.vx);
 
-        const targetCam = player.x - viewport.w * 0.35;
-        state.camX += (targetCam - state.camX) * 0.12;
-        state.camX = clamp(state.camX, 0, STAGE_LENGTH - viewport.w + 240);
-        state.bestSpeed = Math.max(state.bestSpeed, player.vx);
+        for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 320 * dt; p.life -= dt; }
+        while (particles.length && particles[0].life <= 0) particles.shift();
       }
 
       let endMessage = '';
-      function endGame(clear, msg) {
-        endMessage = msg;
-        state.mode = clear ? GameState.CLEAR : GameState.GAME_OVER;
-      }
+      const endGame = (clear, msg) => { endMessage = msg; state.mode = clear ? GameState.CLEAR : GameState.GAME_OVER; sfx(clear ? 980 : 150, clear ? 'triangle' : 'sawtooth', .25, .09); };
+      const rank = () => missile.progress < 50 ? 'S' : missile.progress < 65 ? 'A' : missile.progress < 80 ? 'B' : missile.progress < 95 ? 'C' : 'D';
 
-      function rank() {
-        const p = missile.progress;
-        if (p < 50) return 'S'; if (p < 65) return 'A'; if (p < 80) return 'B'; if (p < 95) return 'C'; return 'D';
+      function drawPlayer() {
+        const bob = Math.sin(state.pulseTime * 10) * 1.8;
+        ctx.save(); ctx.translate(player.x + player.width / 2, player.y + player.height / 2 + bob);
+        ctx.fillStyle = '#d7f0ff'; ctx.fillRect(-16, -18, 32, 36);
+        ctx.fillStyle = '#7dd8ff'; ctx.beginPath(); ctx.arc(0, -26, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#12263f'; ctx.fillRect(-5, -29, 3, 3); ctx.fillRect(2, -29, 3, 3);
+        ctx.fillStyle = '#8cf3cd'; ctx.fillRect(-20, 10, 40, 6);
+        ctx.restore();
       }
 
       function draw() {
         const w = viewport.w, h = viewport.h;
-        ctx.fillStyle = '#080b16'; ctx.fillRect(0,0,w,h);
+        const sky = ctx.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#0e1838'); sky.addColorStop(1, '#060a16'); ctx.fillStyle = sky; ctx.fillRect(0,0,w,h);
+        for (let i=0; i<90; i++) { ctx.fillStyle = `rgba(180,200,255,${0.12 + (i%4)*0.03})`; ctx.fillRect((i*137 - state.camX*0.25)% (w+50), 40 + (i*71)%280, 2, 2); }
 
-        ctx.save();
-        ctx.translate(-state.camX, 0);
-
-        ctx.fillStyle = '#141b2a';
-        for (let i = 0; i < 40; i++) ctx.fillRect(i*180, 70 + (i%3)*24, 120, 8);
-
+        ctx.save(); ctx.translate(-state.camX, 0);
         for (const obj of levelObjects) {
-          if (obj.type === 'platform') { ctx.fillStyle = '#2e3445'; }
-          if (obj.type === 'slow_floor') { ctx.fillStyle = '#1d2b4e'; }
-          if (obj.type === 'boost_floor') { ctx.fillStyle = '#1db2e8'; }
-          if (obj.type === 'gravity_zone') { ctx.fillStyle = 'rgba(168,108,247,.35)'; }
-          if (obj.type === 'load_noise') { ctx.fillStyle = '#d84545'; }
-          if (obj.type === 'goal') { ctx.fillStyle = '#8df58b'; }
-          ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+          if (obj.type === 'platform') { const g = ctx.createLinearGradient(0, obj.y, 0, obj.y + obj.height); g.addColorStop(0, '#465272'); g.addColorStop(1, '#242d42'); ctx.fillStyle = g; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }
+          if (obj.type === 'slow_floor') { ctx.fillStyle = '#394d96'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }
+          if (obj.type === 'boost_floor') { ctx.fillStyle = '#27d6ff'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }
+          if (obj.type === 'gravity_zone') { ctx.fillStyle = 'rgba(172,116,255,.28)'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }
+          if (obj.type === 'load_noise') { ctx.fillStyle = '#ec4f67'; ctx.beginPath(); ctx.moveTo(obj.x + obj.width / 2, obj.y); ctx.lineTo(obj.x + obj.width, obj.y + obj.height); ctx.lineTo(obj.x, obj.y + obj.height); ctx.closePath(); ctx.fill(); }
+          if (obj.type === 'goal') { ctx.fillStyle = '#93fda5'; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); ctx.fillStyle = '#113828'; ctx.fillText('GOAL', obj.x + 14, obj.y + 50); }
         }
 
         const loadWorldX = STAGE_LENGTH * (missile.progress / 100);
-        ctx.fillStyle = 'rgba(255,30,30,.6)';
-        ctx.fillRect(loadWorldX - 8, 0, 16, h);
-        ctx.fillStyle = '#ff9e9e';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText(`NUCLEAR LOAD ${missile.progress.toFixed(0)}%`, loadWorldX + 12, 34);
-
-        ctx.fillStyle = '#f2f8ff';
-        ctx.fillRect(player.x, player.y, player.width, player.height);
-
+        ctx.fillStyle = 'rgba(255,45,45,.55)'; ctx.fillRect(loadWorldX - 8, 0, 16, h);
+        drawPlayer();
+        for (const p of particles) { ctx.fillStyle = `rgba(${p.color},${Math.max(0,p.life*2)})`; ctx.beginPath(); ctx.arc(p.x, p.y, 2.8, 0, Math.PI*2); ctx.fill(); }
         ctx.restore();
 
-        const dist = Math.max(0, STAGE_LENGTH - player.x);
-        ctx.fillStyle = '#dbe7ff';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText(`LOAD ${missile.progress.toFixed(1)}%`, 14, 28);
-        ctx.fillText(`DIST ${(dist/3).toFixed(0)}m`, 14, 52);
+        ctx.fillStyle = '#e8f3ff'; ctx.font = 'bold 18px sans-serif'; ctx.fillText(`LOAD ${missile.progress.toFixed(1)}%`, 14, 28); ctx.fillText(`DIST ${((STAGE_LENGTH - player.x)/3).toFixed(0)}m`, 14, 52);
+        ctx.fillStyle = '#2a2f3f'; ctx.fillRect(180, 12, w - 200, 12); ctx.fillStyle = '#ff5252'; ctx.fillRect(180, 12, (w - 200) * (missile.progress / 100), 12);
 
-        ctx.fillStyle = '#2a2f3f'; ctx.fillRect(180, 12, w - 200, 12);
-        ctx.fillStyle = '#ff5252'; ctx.fillRect(180, 12, (w - 200) * (missile.progress / 100), 12);
+        if (state.mode === GameState.TITLE) overlay('ABORT RUN', 'HOLD to sprint / RELEASE to jump\nTAP TO START');
+        else if (state.mode === GameState.READY) overlay(`${Math.ceil(state.readyTimer)}`, 'RUN');
+        else if (state.mode === GameState.CLEAR) overlay('ABORT COMPLETE', `TIME ${state.gameTime.toFixed(2)}s / LOAD ${missile.progress.toFixed(1)}% / RANK ${rank()}\nTAP TO TITLE`);
+        else if (state.mode === GameState.GAME_OVER) overlay('MISSION FAILED', `${endMessage}\nTAP TO TITLE`);
 
-        if (state.mode === GameState.TITLE) {
-          overlay('ABORT RUN', 'TAP TO START');
-        } else if (state.mode === GameState.READY) {
-          overlay(`${Math.ceil(state.readyTimer)}`, 'RUN');
-        } else if (state.mode === GameState.CLEAR) {
-          overlay('ABORT COMPLETE', `TIME ${state.gameTime.toFixed(2)}s / LOAD ${missile.progress.toFixed(1)}% / RANK ${rank()}\nTAP TO TITLE`);
-        } else if (state.mode === GameState.GAME_OVER) {
-          overlay('MISSION FAILED', `${endMessage}\nTAP TO TITLE`);
-        }
-
-        if (state.warningPulse > 0 && state.mode === GameState.PLAYING) {
-          ctx.strokeStyle = `rgba(255,40,40,${0.2 + 0.55 * state.warningPulse})`;
-          ctx.lineWidth = 18;
-          ctx.strokeRect(0, 0, w, h);
-          ctx.fillStyle = `rgba(255,80,80,${0.25 * state.warningPulse})`;
-          ctx.fillRect(0, 0, w, h);
-        }
-
-        if (state.hitFlashTimer > 0 && state.mode === GameState.PLAYING) {
-          const alpha = clamp(state.hitFlashTimer / 0.28, 0, 1) * 0.5;
-          ctx.fillStyle = `rgba(255, 110, 110, ${alpha})`;
-          ctx.fillRect(0, 0, w, h);
-          ctx.strokeStyle = `rgba(255, 180, 180, ${alpha})`;
-          ctx.lineWidth = 10;
-          ctx.strokeRect(0, 0, w, h);
-        }
-
-        ctx.fillStyle = 'rgba(210,220,255,.72)';
-        ctx.font = '12px monospace';
-        ctx.fillText(`ver ${GAME_VERSION}`, w - 108, h - 12);
+        if (state.warningPulse > 0 && state.mode === GameState.PLAYING) { ctx.strokeStyle = `rgba(255,40,40,${0.2 + 0.55 * state.warningPulse})`; ctx.lineWidth = 18; ctx.strokeRect(0, 0, w, h); }
+        if (state.hitFlashTimer > 0 && state.mode === GameState.PLAYING) { const alpha = clamp(state.hitFlashTimer / 0.28, 0, 1) * 0.5; ctx.fillStyle = `rgba(255, 110, 110, ${alpha})`; ctx.fillRect(0, 0, w, h); }
+        ctx.fillStyle = 'rgba(210,220,255,.72)'; ctx.font = '12px monospace'; ctx.fillText(`ver ${GAME_VERSION}`, w - 108, h - 12);
       }
 
-      function respawnNearPlatform() {
-        const maxRespawnDistance = 900;
-        let nearest = null;
-        let nearestDist = Infinity;
-
-        for (const obj of levelObjects) {
-          if (obj.type !== 'platform') continue;
-          const platformTop = obj.y - player.height;
-          const candidateX = clamp(player.x, obj.x + 18, obj.x + obj.width - player.width - 18);
-          const dx = candidateX - player.x;
-          const dy = platformTop - player.y;
-          const dist = Math.hypot(dx, dy);
-
-          if (dist <= maxRespawnDistance && dist < nearestDist) {
-            nearestDist = dist;
-            nearest = { x: candidateX, y: platformTop };
-          }
-        }
-
-        if (!nearest) return endGame(false, 'SIGNAL LOST');
-        player.x = nearest.x;
-        player.y = nearest.y;
-        player.vx = 0;
-        player.vy = 0;
-        player.grounded = true;
-      }
-
-      function overlay(title, subtitle) {
-        const w = viewport.w, h = viewport.h;
-        ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0,0,w,h);
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 52px sans-serif'; ctx.fillText(title, w/2, h/2 - 22);
-        ctx.font = 'bold 22px sans-serif';
-        subtitle.split('\n').forEach((line,i)=>ctx.fillText(line, w/2, h/2 + 26 + i*28));
-        ctx.textAlign = 'start';
-      }
+      function respawnNearPlatform() { const maxRespawnDistance = 900; let nearest = null; let nearestDist = Infinity; for (const obj of levelObjects) { if (obj.type !== 'platform') continue; const platformTop = obj.y - player.height; const candidateX = clamp(player.x, obj.x + 18, obj.x + obj.width - player.width - 18); const dist = Math.hypot(candidateX - player.x, platformTop - player.y); if (dist <= maxRespawnDistance && dist < nearestDist) { nearestDist = dist; nearest = { x: candidateX, y: platformTop }; } } if (!nearest) return endGame(false, 'SIGNAL LOST'); Object.assign(player, { x: nearest.x, y: nearest.y, vx: 0, vy: 0, grounded: true }); }
+      function overlay(title, subtitle) { const w = viewport.w, h = viewport.h; ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0,0,w,h); ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = 'bold 52px sans-serif'; ctx.fillText(title, w/2, h/2 - 22); ctx.font = 'bold 22px sans-serif'; subtitle.split('\n').forEach((line,i)=>ctx.fillText(line, w/2, h/2 + 26 + i*28)); ctx.textAlign = 'start'; }
 
       let last = performance.now();
-      function loop(t) {
-        const dt = Math.min(0.033, (t - last) / 1000); last = t;
-        update(dt); draw();
-        requestAnimationFrame(loop);
-      }
-
+      function loop(t) { const dt = Math.min(0.033, (t - last) / 1000); last = t; update(dt); draw(); requestAnimationFrame(loop); }
       window.addEventListener('resize', resize);
       window.addEventListener('pointerdown', (e) => { e.preventDefault(); press(); });
       window.addEventListener('pointerup', (e) => { e.preventDefault(); release(); });
       window.addEventListener('pointercancel', release);
-      window.addEventListener('blur', () => {
-        if (state.mode === GameState.PLAYING || state.mode === GameState.READY) { state.prevMode = state.mode; state.mode = GameState.PAUSED; }
-      });
-      window.addEventListener('focus', () => {
-        if (state.mode === GameState.PAUSED) state.mode = state.prevMode;
-      });
-
+      window.addEventListener('blur', () => { if (state.mode === GameState.PLAYING || state.mode === GameState.READY) { state.prevMode = state.mode; state.mode = GameState.PAUSED; } });
+      window.addEventListener('focus', () => { if (state.mode === GameState.PAUSED) state.mode = state.prevMode; });
       resize(); requestAnimationFrame(loop);
     })();
   </script>

@@ -1,3 +1,13 @@
-node_modules/
-test-results/
-playwright-report/
+# Binary/media assets are intentionally excluded from git.
+assets/**/*
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.mp3
+*.wav
+*.ogg
+*.m4a
+*.mp4
+*.mov
