@@ -11,3 +11,7 @@ assets/**/*
 *.m4a
 *.mp4
 *.mov
+
+node_modules/
+test-results/
+playwright-report/
